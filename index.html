@@ -869,8 +869,8 @@ body.light .fi2{background:rgba(255,255,255,.9);color:var(--text)}
 // CONFIG
 // ══════════════════════════════════════════
 const WORKER    = 'https://frosty-wood-37ecbugiq-workerjs.kunal-249.workers.dev';
-// ── CHANGED: let instead of const so fetchConfig() can populate them ──
-let GOOGLE_ID = '';
+// ── CHANGED: let so fetchConfig() can override if worker has /config ──
+let GOOGLE_ID = '714484298488-ucn9blv0cr5ol2h0v9p6irbrj87murce.apps.googleusercontent.com';
 let ALLOWED   = 'hitwicket.com';
 // ── CHANGED: guard flag prevents double-init of GSI ──
 let _gsiInited = false;
@@ -878,22 +878,19 @@ let _gsiInited = false;
 const REDIRECT  = window.location.origin + window.location.pathname;
 const APP_URL   = window.location.origin + window.location.pathname;
 
-// ── CHANGED: fetch config from worker (same as Blueprint) ──
+// ── CHANGED: try to fetch config from worker; fall back to hardcoded values ──
 async function fetchConfig() {
   try {
     const res  = await fetch(WORKER + '/config');
+    if (!res.ok) return; // worker has no /config — use hardcoded defaults
     const data = await res.json();
     if (data.google_client_id) {
       GOOGLE_ID = data.google_client_id;
       ALLOWED   = data.allowed_domain || 'hitwicket.com';
-    } else {
-      throw new Error('Config missing google_client_id');
     }
   } catch(e) {
-    const el = document.getElementById('loginErr');
-    el.textContent = 'Failed to load app config. Check your connection or contact admin.';
-    el.classList.add('on');
-    throw e;
+    // Network error or no /config endpoint — hardcoded values already set, carry on
+    console.warn('[config] fetchConfig failed, using hardcoded client ID:', e.message);
   }
 }
 
@@ -2735,12 +2732,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   setLoad(20, 'CHECKING SESSION');
   document.addEventListener('click', e => { if(!e.target.closest('.user-pill-wrap')) closeProfileMenu(); });
 
-  // ── CHANGED: fetch config before any auth attempt (same as Blueprint) ──
-  try {
-    await fetchConfig();
-  } catch(e) {
-    return; // Error already shown in login screen
-  }
+  // ── CHANGED: fetch config (safe — never throws, falls back to hardcoded ID) ──
+  await fetchConfig();
 
   const sess = loadSession();
   if (sess?.user) {
